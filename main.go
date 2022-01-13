@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"net/smtp"
 	"os"
+	"text/template"
 
 	"github.com/gocolly/colly/v2"
+	"github.com/joho/godotenv"
 )
 
 type toolLink struct {
@@ -53,10 +56,24 @@ func mail(t *toolLink) {
 	to := []string{os.Getenv("MAILTO")}
 
 	smtpServer := smtpServer{host: "smtp.gmail.com", port: "587"}
-	message := []byte(fmt.Sprintf("%q", t))
+
+	tp, _ := template.ParseFiles("template.html")
+
+	var body bytes.Buffer
+
+	mimeHeaders := "MIME-version: 1.0;\nContent-Type: text/html; charset=\"UTF-8\";\n\n"
+	body.Write([]byte(fmt.Sprintf("From: Tool API \nSubject: This is the new Tool of the Day \n%s\n\n", mimeHeaders)))
+
+	tp.Execute(&body, struct {
+		Desc string
+		Link string
+	}{
+		Desc: t.desc,
+		Link: t.link,
+	})
 
 	auth := smtp.PlainAuth("", from, password, smtpServer.host)
-	err := smtp.SendMail(smtpServer.Address(), auth, from, to, message)
+	err := smtp.SendMail(smtpServer.Address(), auth, from, to, body.Bytes())
 
 	if err != nil {
 		log.Println(err)
@@ -67,6 +84,11 @@ func mail(t *toolLink) {
 }
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file. Make sure one exists!")
+	}
+
 	tools := scrape()
 	mail(&tools)
 }
