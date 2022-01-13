@@ -2,8 +2,10 @@ package main
 
 import (
 	"bytes"
+	"embed"
 	"fmt"
 	"log"
+	"net"
 	"net/smtp"
 	"os"
 	"text/template"
@@ -17,14 +19,10 @@ type toolLink struct {
 	link string
 }
 
-type smtpServer struct {
-	host string
-	port string
-}
-
-func (s *smtpServer) Address() string {
-	return s.host + ":" + s.port
-}
+var (
+	//go:embed resources
+	res embed.FS
+)
 
 func scrape() toolLink {
 	log.Println("Starting Scraping")
@@ -55,9 +53,12 @@ func mail(t *toolLink) {
 	password := os.Getenv("GPW")
 	to := []string{os.Getenv("MAILTO")}
 
-	smtpServer := smtpServer{host: "smtp.gmail.com", port: "587"}
+	host := "smtp.gmail.com"
+	port := "587"
+	smtpServer := net.JoinHostPort(host, port)
 
-	tp, _ := template.ParseFiles("template.html")
+	pages := "resources/template.html"
+	tp, _ := template.ParseFS(res, pages)
 
 	var body bytes.Buffer
 
@@ -72,8 +73,8 @@ func mail(t *toolLink) {
 		Link: t.link,
 	})
 
-	auth := smtp.PlainAuth("", from, password, smtpServer.host)
-	err := smtp.SendMail(smtpServer.Address(), auth, from, to, body.Bytes())
+	auth := smtp.PlainAuth("", from, password, host)
+	err := smtp.SendMail(smtpServer, auth, from, to, body.Bytes())
 
 	if err != nil {
 		log.Println(err)
